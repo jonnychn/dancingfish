@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Flappy Fish</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Fish properties
+        const fish = {
+            x: 150,
+            y: 200,
+            width: 40,
+            height: 20,
+            vy: 0,
+            gravity: 0.3,
+            swimPower: -6,
+            isSwimming: false
+        };
+
+        // Game properties
+        const game = {
+            speed: 2,
+            score: 0,
+            gameOver: false,
+            frameCount: 0
+        };
+
+        // Coral obstacles array
+        let corals = [];
+        const coralGap = 150; // Gap between top and bottom coral
+        const coralWidth = 50;
+
+        // Sound effects
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSwimSound() {
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.1);
+        }
+
+        function playHitSound() {
+            const oscillator = audioCtx.createOscillator();
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(100, audioCtx.currentTime);
+            oscillator.connect(audioCtx.destination);
+            oscillator.start();
+            oscillator.stop(audioCtx.currentTime + 0.2);
+        }
+
+        // Generate coral pair
+        function generateCoral() {
+            const minHeight = 50;
+            const maxHeight = canvas.height - coralGap - minHeight;
+            const topHeight = Math.random() * (maxHeight - minHeight) + minHeight;
+            return {
+                x: canvas.width,
+                topHeight: topHeight,
+                bottomHeight: canvas.height - topHeight - coralGap,
+                scored: false
+            };
+        }
+
+        // Initialize game
+        corals.push(generateCoral());
+
+        // Handle swimming
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                fish.vy = fish.swimPower;
+                fish.isSwimming = true;
+                playSwimSound();
+            }
+        });
+
+        // Draw fish (simple fish shape)
+        function drawFish(x, y, width, height) {
+            // Body (blue oval)
+            ctx.fillStyle = '#1e90ff';
+            ctx.beginPath();
+            ctx.ellipse(x + width/2, y + height/2, width/2, height/2, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Tail (orange triangle)
+            ctx.fillStyle = 'orange';
+            ctx.beginPath();
+            ctx.moveTo(x, y + height/2);
+            ctx.lineTo(x - width/2, y);
+            ctx.lineTo(x - width/2, y + height);
+            ctx.fill();
+            
+            // Eye (white with black pupil)
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(x + width * 0.7, y + height/2, height/4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(x + width * 0.7, y + height/2, height/8, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // Draw coral
+        function drawCoral(x, topHeight, bottomHeight) {
+            ctx.fillStyle = '#ff6347'; // Coral color
+            // Top coral
+            ctx.fillRect(x, 0, coralWidth, topHeight);
+            // Bottom coral
+            ctx.fillRect(x, canvas.height - bottomHeight, coralWidth, bottomHeight);
+        }
+
+        // Main game loop
+        function gameLoop() {
+            if (game.gameOver) {
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.fillText('Game Over! Score: ' + game.score, canvas.width/2 - 100, canvas.height/2);
+                return;
+            }
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw ocean background
+            ctx.fillStyle = '#00b7eb';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Update fish physics
+            fish.vy += fish.gravity;
+            fish.y += fish.vy;
+
+            // Keep fish within bounds
+            if (fish.y < 0) fish.y = 0;
+            if (fish.y + fish.height > canvas.height) {
+                fish.y = canvas.height - fish.height;
+                game.gameOver = true;
+                playHitSound();
+            }
+
+            // Move and manage corals
+            game.frameCount++;
+            corals.forEach(coral => {
+                coral.x -= game.speed;
+                
+                // Check collision
+                if (fish.x + fish.width > coral.x && 
+                    fish.x < coral.x + coralWidth) {
+                    if (fish.y < coral.topHeight || 
+                        fish.y + fish.height > canvas.height - coral.bottomHeight) {
+                        game.gameOver = true;
+                        playHitSound();
+                    }
+                }
+
+                // Update score
+                if (!coral.scored && fish.x > coral.x + coralWidth) {
+                    game.score++;
+                    coral.scored = true;
+                }
+            });
+
+            // Remove off-screen corals
+            corals = corals.filter(coral => coral.x + coralWidth > 0);
+
+            // Add new coral
+            if (game.frameCount % 100 === 0) { // Spawn every 100 frames
+                corals.push(generateCoral());
+            }
+
+            // Draw corals
+            corals.forEach(coral => {
+                drawCoral(coral.x, coral.topHeight, coral.bottomHeight);
+            });
+
+            // Draw fish
+            drawFish(fish.x, fish.y, fish.width, fish.height);
+
+            // Draw score
+            ctx.fillStyle = 'white';
+            ctx.font = '20px Arial';
+            ctx.fillText('Score: ' + game.score, 10, 30);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
